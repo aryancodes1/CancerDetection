@@ -1,7 +1,7 @@
-pip install streamlit
-pip install tensorflow
-pip install ultralytics
-pip install opencv-python
-pip install pillow
-pip install numpy
+streamlit
+tensorflow
+ultralytics
+opencv-python
+pillow
+numpy
 cv2

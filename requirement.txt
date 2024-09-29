@@ -1,0 +1,6 @@
+pip install streamlit
+pip install tensorflow
+pip install ultralytics
+pip install opencv-python
+pip install pillow
+pip install numpy

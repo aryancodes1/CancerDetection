@@ -1,7 +1,8 @@
+opencv-python-headless
 streamlit
 tensorflow
 ultralytics
 pillow
 numpy
 easyocr
-opencv-python-headless
+groq

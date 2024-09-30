@@ -7,7 +7,6 @@ from ultralytics import YOLO
 from tensorflow.keras.models import load_model
 import easyocr
 import tensorflow as tf
-import tempfile
 from groq import Groq
 
 yolo_model = YOLO("saved_models/best.pt")
@@ -57,7 +56,7 @@ def get_bot_response(user_input, extracted_text):
         st.error(f"Error occurred: {str(e)}")
         return None
 
-# Preprocess and predict for tumor detection
+
 def preprocess_image(img, img_size=(96, 96)):
     if img is not None:
         img = cv2.resize(img, img_size)
@@ -78,59 +77,120 @@ def predict_image(model_path, img):
     else:
         return None
 
-# Streamlit app setup
-st.title("Medical Diagnosis & Prescription System")
 
-# Tabs for functionalities
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["Brain Tumor Detection", "Breast Cancer Diagnosis", "Prescription Q&A", "CSV Format Guide", "Tumor Detection from Pathological Images"])
+
+st.markdown(
+    """
+    <style>
+    .title {
+        font-size: 50px;
+        font-family: 'Arial';
+        color: #4CAF50;
+        text-align: center;
+    }
+    .subheader {
+        font-size: 30px;
+        color: #333;
+        text-align: left;
+    }
+    .footer {
+        text-align: center;
+        color: #888;
+        margin-top: 50px;
+    }
+    .container {
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background-color: #f9f9f9;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    .stDownloadButton>button {
+        background-color: #4CAF50;
+        color: white;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    .stTabs {
+        padding: 1rem;
+        background-color: #f9f9f9;
+        border-radius: 10px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True
+)
+
+st.markdown("<h1 class='title'>💻 Cancer Diagnosis & Detection System </h1>", unsafe_allow_html=True)
+
+st.sidebar.markdown("<h3 style='text-align: center;'>Navigation</h3>", unsafe_allow_html=True)
+tabs = ["🧠 Brain Tumor Detection", "👩‍⚕️ Breast Cancer Diagnosis", "💊 Prescription Q&A", "📊 CSV Format Guide", "🔬 Pathological Tumor Detection"]
+selection = st.sidebar.radio("Go to", tabs)
 
 # Tab 1: Brain Tumor Detection using YOLO
-with tab1:
-    st.header("Brain Tumor Detection using YOLOv8")
-    uploaded_files = st.file_uploader("Choose images...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+if selection == "🧠 Brain Tumor Detection":
+    st.markdown("<h2 class='subheader'>🧠 Brain Tumor Detection using YOLOv8</h2>", unsafe_allow_html=True)
+    
+    with st.expander("📥 Upload Brain Images", expanded=True):
+        uploaded_files = st.file_uploader("Choose images...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
     
     if uploaded_files:
-        for uploaded_file in uploaded_files:
+        cols = st.columns(len(uploaded_files))
+        for idx, uploaded_file in enumerate(uploaded_files):
             image = Image.open(uploaded_file)
-            st.image(image, caption='Uploaded Image', use_column_width=True)
+            cols[idx].image(image, caption=f'Uploaded Image {idx+1}', use_column_width=True)
             image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            result_image = process_image(image_cv)
-            st.image(result_image, caption='Result Image with Detections', use_column_width=True)
+
+            with st.spinner('🔍 Processing image...'):
+                result_image = process_image(image_cv)
+
+            st.image(result_image, caption=f'Result Image with Detections {idx+1}', use_column_width=True)
 
 # Tab 2: Breast Cancer Diagnosis
-with tab2:
-    st.header("Breast Cancer Diagnosis Prediction")
-    uploaded_file = st.file_uploader("Upload CSV file for predictions", type=["csv"])
+elif selection == "👩‍⚕️ Breast Cancer Diagnosis":
+    st.markdown("<h2 class='subheader'>👩‍⚕️ Breast Cancer Diagnosis Prediction</h2>", unsafe_allow_html=True)
+    
+    with st.expander("📥 Upload CSV File"):
+        uploaded_file = st.file_uploader("Upload CSV file for predictions", type=["csv"])
 
     if uploaded_file is not None:
         data = pd.read_csv(uploaded_file)
         original_ids = data["id"] if "id" in data.columns else None
         processed_data = preprocess_data(data)
         processed_data = processed_data.values.reshape(processed_data.shape[0], processed_data.shape[1], 1)
-        predictions = predict_diagnosis_for_dataset(lstm_model, processed_data)
+
+        with st.spinner('🔍 Predicting...'):
+            predictions = predict_diagnosis_for_dataset(lstm_model, processed_data)
+
         results = pd.DataFrame()
         if original_ids is not None:
             results["id"] = original_ids
         results["predicted_diagnosis"] = predictions
-        st.write("Predictions:")
+
+        st.success("✅ Predictions generated successfully!")
         st.dataframe(results)
         csv = results.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="Download Predictions as CSV",
+            label="📥 Download Predictions as CSV",
             data=csv,
             file_name="predictions.csv",
             mime="text/csv",
         )
 
 # Tab 3: Prescription Q&A
-with tab3:
-    st.header("Prescription Question-Answering System")
+elif selection == "💊 Prescription Q&A":
+    st.markdown("<h2 class='subheader'>💊 Prescription Question-Answering System</h2>", unsafe_allow_html=True)
     
-    subtab1, subtab2 = st.tabs(["Upload Prescription", "Ask Questions"])
+    subtab1, subtab2 = st.tabs(["📥 Upload Prescription", "❓ Ask Questions"])
 
-    # Subtab 1: Upload Prescription Image
     with subtab1:
-        st.subheader("Upload your Prescription")
+        st.write("Upload your prescription, and we'll extract the text for you.")
         uploaded_file_prescription = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
         if uploaded_file_prescription is not None:
@@ -139,41 +199,40 @@ with tab3:
             opencv_image = np.array(image_prescription)
             opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_RGB2BGR)
 
-            # Extract text using EasyOCR
-            with st.spinner('Extracting text from the image...'):
+            with st.spinner('🔍 Extracting text from the image...'):
                 extracted_text = extract_text_from_image(opencv_image)
 
             if extracted_text:
                 st.subheader("Extracted Text:")
-                st.write(extracted_text)
+                st.success(extracted_text)
             else:
                 st.warning("No text could be extracted from the image. Please try again.")
 
     # Subtab 2: Ask Questions from Prescription
     with subtab2:
-        st.subheader("Ask Questions about the Prescription")
+        st.write("Ask questions about the prescription.")
         
         if uploaded_file_prescription is None or not extracted_text:
-            st.warning("Please upload a prescription and extract text from it in the 'Upload Prescription' tab first.")
+            st.warning("⚠️ Please upload a prescription and extract text from it in the 'Upload Prescription' tab first.")
         else:
             user_input = st.text_input("Ask a question about the prescription:")
+            submit_button = st.button("Submit")
 
-            if st.button("Submit"):
-                if user_input:
-                    response = get_bot_response(user_input, extracted_text)
-                    if response:
-                        st.success(f"Response: {response}")
-                    else:
-                        st.error("No response received. Check the input or try again.")
+            if submit_button and user_input:
+                st.spinner("🔍 Generating response...") 
+                response = get_bot_response(user_input, extracted_text)
+                if response:
+                    st.success(f"🗣️ Response: {response}")
                 else:
-                    st.error("Please enter a question.")
+                    st.error("⚠️ No response received. Check the input or try again.")
 
 # Tab 4: CSV Format Guide
-with tab4:
-    st.header("CSV File Format Guide")
+elif selection == "📊 CSV Format Guide":
+    st.markdown("<h2 class='subheader'>📊 CSV File Format Guide</h2>", unsafe_allow_html=True)
+    
     st.write("To use the Breast Cancer Diagnosis Prediction feature, your CSV file should include the following columns in this specific order:")
-    st.write("""
-    - **id**: Unique identifier for each sample (optional).
+    st.markdown("""
+   - **id**: Unique identifier for each sample (optional).
     - **radius_mean**: Mean radius of the tumor.
     - **texture_mean**: Mean texture of the tumor.
     - **perimeter_mean**: Mean perimeter of the tumor.
@@ -205,23 +264,28 @@ with tab4:
     - **symmetry_worst**: Worst symmetry of the tumor.
     - **fractal_dimension_worst**: Worst fractal dimension of the tumor.
     """)
+    
+    st.info("If you upload a CSV file without the **id** column, the system will automatically generate predictions based on the remaining columns.")
 
-# Tab 5: Tumor Detection from Pathological Images
-with tab5:
-    st.header("Tumor Detection from Pathological Images")
-    uploaded_image = st.file_uploader("Upload Pathological Image", type=["jpg", "jpeg", "png","tiff","tif"])
+# Tab 5: Pathological Tumor Detection
+elif selection == "🔬 Pathological Tumor Detection":
+    st.markdown("<h2 class='subheader'>🔬 Pathological Tumor Detection</h2>", unsafe_allow_html=True)
+    
+    with st.expander("📥 Upload Tumor Images"):
+        uploaded_file_tumor = st.file_uploader("Choose images...", type=["jpg", "jpeg", "png","tiff","tif"])
 
-    if uploaded_image is not None:
-        image = Image.open(uploaded_image)
-        st.image(image, caption="Uploaded Pathological Image", use_column_width=True)
-        img = np.array(image)
-        
-        predicted_class = predict_image("saved_models/model_pathological_images.keras", img)
-        
-        if predicted_class == 0:
-            st.success("Tumour is Not Detected")
-        elif predicted_class == 1:
-            st.error("Tumour Is Detected")
+    if uploaded_file_tumor is not None:
+        image = Image.open(uploaded_file_tumor)
+        st.image(image, caption='Uploaded Image', use_column_width=True)
+        opencv_image = np.array(image)
+        opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_RGB2BGR)
+
+        with st.spinner('🔍 Predicting tumor...'):
+            predicted_class = predict_image('saved_models/model_pathological_images.keras', opencv_image)
+
+        if predicted_class == 1:
+            st.success("🟢 Tumor detected!")
+        elif predicted_class == 0:
+            st.success("🔵 Tumor not detected.")
         else:
-            st.warning("No prediction available.")
-
+            st.warning("⚠️ Prediction could not be made.")

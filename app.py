@@ -5,6 +5,8 @@ import cv2
 from PIL import Image
 from ultralytics import YOLO
 from tensorflow.keras.models import load_model
+import easyocr
+from groq import Groq 
 
 yolo_model = YOLO("saved_models/best.pt")
 lstm_model = load_model('saved_models/breast_cancer_lstm_model.keras')
@@ -32,13 +34,36 @@ def predict_diagnosis_for_dataset(model, input_data):
     diagnosis = ["B" if pred[0] > pred[1] else "M" for pred in predictions]
     return diagnosis
 
-# Streamlit application layout
-st.title("Medical Diagnosis Application")
+def extract_text_from_image(image):
+    reader = easyocr.Reader(['en'], gpu=False)
+    result = reader.readtext(image, detail=0)
+    return ' '.join(result)
 
-# Create tabs
-tab1, tab2, tab3 = st.tabs(["Brain Tumor Detection", "Breast Cancer Diagnosis", "CSV Format Guide"])
+def get_bot_response(user_input, extracted_text):
+    try:
+        client = Groq(api_key="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")
+        
+        prompt = f"Context: {extracted_text}\nUser Question: {user_input}"
+        
+        chat_completion = client.chat.completions.create(
+            messages=[{
+                "role": "user",
+                "content": prompt,
+            }],
+            model="llama3-8b-8192",  
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error occurred: {str(e)}")
+        return None
 
-# Tab 1: Brain Tumor Detection
+
+st.title("Medical Diagnosis & Prescription System")
+
+# Tabs for functionalities
+tab1, tab2, tab3, tab4 = st.tabs(["Brain Tumor Detection", "Breast Cancer Diagnosis", "Prescription Q&A", "CSV Format Guide"])
+
+# Tab 1: Brain Tumor Detection using YOLO
 with tab1:
     st.header("Brain Tumor Detection using YOLOv8")
     uploaded_files = st.file_uploader("Choose images...", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
@@ -76,9 +101,54 @@ with tab2:
             mime="text/csv",
         )
 
-# Tab 3: CSV Format Guide
-# Tab 3: CSV Format Guide
+# Tab 3: Prescription Q&A
 with tab3:
+    st.header("Prescription Question-Answering System")
+    
+    subtab1, subtab2 = st.tabs(["Upload Prescription", "Ask Questions"])
+
+    # Subtab 1: Upload Prescription Image
+    with subtab1:
+        st.subheader("Upload your Prescription")
+        uploaded_file_prescription = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+        if uploaded_file_prescription is not None:
+            image_prescription = Image.open(uploaded_file_prescription)
+            st.image(image_prescription, caption='Uploaded Prescription', use_column_width=True)
+            opencv_image = np.array(image_prescription)
+            opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_RGB2BGR)
+
+            # Extract text using EasyOCR
+            with st.spinner('Extracting text from the image...'):
+                extracted_text = extract_text_from_image(opencv_image)
+
+            if extracted_text:
+                st.subheader("Extracted Text:")
+                st.write(extracted_text)
+            else:
+                st.warning("No text could be extracted from the image. Please try again.")
+
+    # Subtab 2: Ask Questions from Prescription
+    with subtab2:
+        st.subheader("Ask Questions about the Prescription")
+        
+        if uploaded_file_prescription is None or not extracted_text:
+            st.warning("Please upload a prescription and extract text from it in the 'Upload Prescription' tab first.")
+        else:
+            user_input = st.text_input("Ask a question about the prescription:")
+
+            if st.button("Submit"):
+                if user_input:
+                    response = get_bot_response(user_input, extracted_text)
+                    if response:
+                        st.success(f"Response: {response}")
+                    else:
+                        st.error("No response received. Check the input or try again.")
+                else:
+                    st.error("Please enter a question.")
+
+# Tab 4: CSV Format Guide
+with tab4:
     st.header("CSV File Format Guide")
     st.write("To use the Breast Cancer Diagnosis Prediction feature, your CSV file should include the following columns in this specific order:")
     st.write("""
@@ -117,8 +187,6 @@ with tab3:
     
     st.write("Ensure there are no missing values in the numeric columns.")
     st.write("Example of a valid CSV format:")
-    st.write("```\n"
-             "id,radius_mean,texture_mean,perimeter_mean,area_mean,smoothness_mean,compactness_mean,concavity_mean,concave points_mean,symmetry_mean,fractal_dimension_mean,radius_se,texture_se,perimeter_se,area_se,smoothness_se,compactness_se,concavity_se,concave points_se,symmetry_se,fractal_dimension_se,radius_worst,texture_worst,perimeter_worst,area_worst,smoothness_worst,compactness_worst,concavity_worst,concave points_worst,symmetry_worst,fractal_dimension_worst\n"
-             "1,12.34,15.67,80.45,500.25,0.1,0.2,0.3,0.1,0.5,0.2,1.2,1.3,2.1,5.5,0.05,0.08,0.12,0.07,0.15,0.04,14.56,18.90,90.12,600.60,0.15,0.20,0.25,0.14,0.25,0.08\n"
-             "2,10.12,20.11,70.75,400.45,0.12,0.25,0.15,0.05,0.6,0.15,1.0,1.1,1.8,4.5,0.06,0.09,0.11,0.05,0.10,0.03,12.34,19.20,85.10,550.10,0.18,0.22,0.20,0.12,0.22,0.05\n"
-             "```\n")
+    st.write("""
+    id,radius_mean,texture_mean,perimeter_mean,area_mean,smoothness_mean,compactness_mean,concavity_mean,concave points_mean,symmetry_mean,fractal_dimension_mean,radius_se,texture_se,perimeter_se,area_se,smoothness_se,compactness_se,concavity_se,concave points_se,symmetry_se,fractal_dimension_se,radius_worst,texture_worst,perimeter_worst,area_worst,smoothness_worst,compactness_worst
+""")

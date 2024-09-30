@@ -6,8 +6,10 @@ from PIL import Image
 from ultralytics import YOLO
 from tensorflow.keras.models import load_model
 import easyocr
-from groq import Groq 
+import tensorflow as tf
+import tempfile
 
+# Existing models
 yolo_model = YOLO("saved_models/best.pt")
 lstm_model = load_model('saved_models/breast_cancer_lstm_model.keras')
 
@@ -18,7 +20,7 @@ def process_image(image):
         if boxes is not None:
             for box in boxes:
                 class_id = int(box.cls)
-                if class_id == 0:  
+                if class_id == 0:
                     st.write("Tumor found in the image!")
         result_image = result.plot()
         return result_image
@@ -42,9 +44,7 @@ def extract_text_from_image(image):
 def get_bot_response(user_input, extracted_text):
     try:
         client = Groq(api_key="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")
-        
         prompt = f"Context: {extracted_text}\nUser Question: {user_input}"
-        
         chat_completion = client.chat.completions.create(
             messages=[{
                 "role": "user",
@@ -57,11 +57,32 @@ def get_bot_response(user_input, extracted_text):
         st.error(f"Error occurred: {str(e)}")
         return None
 
+# Preprocess and predict for tumor detection
+def preprocess_image(img, img_size=(96, 96)):
+    if img is not None:
+        img = cv2.resize(img, img_size)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = np.expand_dims(img, axis=0)
+        return img
+    else:
+        st.error("Image could not be loaded.")
+        return None
 
+def predict_image(model_path, img):
+    model = tf.keras.models.load_model(model_path)
+    preprocessed_img = preprocess_image(img)
+    if preprocessed_img is not None:
+        prediction = model.predict(preprocessed_img)
+        predicted_class = np.argmax(prediction, axis=1)[0]
+        return predicted_class
+    else:
+        return None
+
+# Streamlit app setup
 st.title("Medical Diagnosis & Prescription System")
 
 # Tabs for functionalities
-tab1, tab2, tab3, tab4 = st.tabs(["Brain Tumor Detection", "Breast Cancer Diagnosis", "Prescription Q&A", "CSV Format Guide"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Brain Tumor Detection", "Breast Cancer Diagnosis", "Prescription Q&A", "CSV Format Guide", "Tumor Detection from Pathological Images"])
 
 # Tab 1: Brain Tumor Detection using YOLO
 with tab1:
@@ -184,9 +205,23 @@ with tab4:
     - **symmetry_worst**: Worst symmetry of the tumor.
     - **fractal_dimension_worst**: Worst fractal dimension of the tumor.
     """)
-    
-    st.write("Ensure there are no missing values in the numeric columns.")
-    st.write("Example of a valid CSV format:")
-    st.write("""
-    id,radius_mean,texture_mean,perimeter_mean,area_mean,smoothness_mean,compactness_mean,concavity_mean,concave points_mean,symmetry_mean,fractal_dimension_mean,radius_se,texture_se,perimeter_se,area_se,smoothness_se,compactness_se,concavity_se,concave points_se,symmetry_se,fractal_dimension_se,radius_worst,texture_worst,perimeter_worst,area_worst,smoothness_worst,compactness_worst
-""")
+
+# Tab 5: Tumor Detection from Pathological Images
+with tab5:
+    st.header("Tumor Detection from Pathological Images")
+    uploaded_image = st.file_uploader("Upload Pathological Image", type=["jpg", "jpeg", "png","tiff","tif"])
+
+    if uploaded_image is not None:
+        image = Image.open(uploaded_image)
+        st.image(image, caption="Uploaded Pathological Image", use_column_width=True)
+        img = np.array(image)
+        
+        predicted_class = predict_image("saved_models/model_pathological_images.keras", img)
+        
+        if predicted_class == 0:
+            st.success("Tumour is Not Detected")
+        elif predicted_class == 1:
+            st.error("Tumour Is Detected")
+        else:
+            st.warning("No prediction available.")
+

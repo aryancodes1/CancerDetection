@@ -8,8 +8,8 @@ from tensorflow.keras.models import load_model
 import easyocr
 import tensorflow as tf
 import tempfile
+from groq import Groq
 
-# Existing models
 yolo_model = YOLO("saved_models/best.pt")
 lstm_model = load_model('saved_models/breast_cancer_lstm_model.keras')
 

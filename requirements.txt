@@ -6,4 +6,3 @@ pillow
 numpy
 easyocr
 groq
-libgl1
